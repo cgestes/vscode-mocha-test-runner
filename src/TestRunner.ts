@@ -41,32 +41,38 @@ function runTestsCore(processArgs: Partial<TestProcessRequest>, debug: boolean) 
     };
 
     if (debug) {
-        spawnTestProcessOptions.execArgv = ['--debug-brk=' + config.debugPort];
+        spawnTestProcessOptions.execArgv = ['--inspect-brk=' + config.debugPort];
     }
 
     const childProcess = spawnTestProcess(testProcess, [], spawnTestProcessOptions);
 
     if (debug) {
-        vscode.commands.executeCommand('vscode.startDebug', {
-            "name": "Attach",
-            "type": "node",
-            "request": "attach",
-            "port": config.debugPort,
-            "address": "localhost",
-            "sourceMaps": true,
-            "trace": config.debugTrace,
-            "runtimeArgs": [
-                "--nolazy"
-            ],
-            "env": {
-                "NODE_ENV": "test",
-            },
-            "outFiles": [
-                path.join(args.workspacePath, args.rootPath, "**/*.js")
-            ],
-        });
+        setTimeout(function() {
+          vscode.commands
+              .executeCommand('vscode.startDebug', {
+                'name': 'Attach',
+                'type': 'node',
+                'request': 'attach',
+                'port': config.debugPort,
+                'address': '127.0.0.1',
+                //"sourceMaps": true,
+                //"trace": config.debugTrace,
+                // "runtimeArgs": [
+                //     "--nolazy"
+                // ],
+                // "env": {
+                //     "NODE_ENV": "test",
+                // },
+                // "outFiles": [
+                //     path.join(args.workspacePath, args.rootPath, "**/*.js")
+                // ],
+              })
+              .then((args) => {
+                console.log('RES:', args);
+              })
 
-        args.options = { ...args.options, timeout: 360000 };
+        }, 1000);
+      args.options = {...args.options, timeout: 360000};
     }
 
     return new Promise<TestProcessResponse>((resolve, reject) => {
@@ -82,12 +88,14 @@ function runTestsCore(processArgs: Partial<TestProcessRequest>, debug: boolean) 
 
         childProcess.on('message', data => {
             results = data;
+            console.log('MESSAGE:', data);
         });
 
         childProcess.stdout.on('data', data => {
             if (typeof data !== 'string') {
                 data = data.toString('utf8');
             }
+            console.log('DATAOUT:', data);
 
             stdout.push(data);
         });
@@ -96,23 +104,28 @@ function runTestsCore(processArgs: Partial<TestProcessRequest>, debug: boolean) 
             if (typeof data !== 'string') {
                 data = data.toString('utf8');
             }
+            console.log("DATAERR:", data);
 
             if (data.startsWith('Warning:') ||
-                data.startsWith('Debugger listening on')) {
+                data.startsWith('Debugger listening on') ||
+                data.startsWith('For help see')) {
                 stdout.push(data);
+                console.log("to stdout ERR");
                 return;
             }
-
+            console.log("We came here");
             stderr.push(data);
             if (!stderrTimeout) {
                 stderrTimeout = setTimeout(() => {
-                    childProcess.kill('SIGTERM');
-                    doReject();
+                    console.log("ICI TO KILL THE PROCESS (da fuck)");
+                    // childProcess.kill('SIGTERM');
+                    // doReject();
                 }, 500);
             }
         });
 
         childProcess.on('exit', code => {
+            console.log("Child process exit", code)
             if (code !== 0) {
                 if (stderrTimeout) {
                     pendingReject = true;
